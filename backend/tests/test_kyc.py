@@ -69,6 +69,7 @@ def test_admin_reject_sets_rejected_with_reason(
         ("GET", f"/admin/kyc/submissions/{UNKNOWN_SUBMISSION_ID}/image"),
         ("POST", f"/admin/kyc/submissions/{UNKNOWN_SUBMISSION_ID}/approve"),
         ("POST", f"/admin/kyc/submissions/{UNKNOWN_SUBMISSION_ID}/reject"),
+        ("GET", "/admin/ledger/verify"),
     ],
 )
 def test_normal_user_cannot_access_admin_endpoints(

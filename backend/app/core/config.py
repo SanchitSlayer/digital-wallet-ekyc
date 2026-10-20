@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     cors_origin: str
     upload_dir: Path
     max_upload_bytes: int
+    enable_dev_topup: bool
+    qr_signing_key: str
+    qr_expire_minutes: int
 
     @field_validator("upload_dir")
     @classmethod

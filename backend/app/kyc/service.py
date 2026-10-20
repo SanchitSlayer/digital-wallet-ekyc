@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.kyc import ocr, repository
 from app.kyc.models import KycStatus, KycSubmission
 from app.kyc.schemas import mask_id_number
+from app.wallet import service as wallet_service
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,7 @@ def approve_submission(db: Session, admin: User, submission_id: uuid.UUID) -> Ky
     repository.record_review(
         db, submission, status=KycStatus.VERIFIED, reviewer_id=admin.id, rejection_reason=None
     )
+    wallet_service.open_wallet(db, submission.user_id)
     db.commit()
     logger.info("KYC submission %s approved by admin %s", submission.id, admin.id)
     return submission
