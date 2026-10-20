@@ -39,7 +39,7 @@ erDiagram
     }
     wallets {
         uuid id PK
-        uuid user_id FK,UK
+        uuid user_id FK, UK
         bigint balance_paise "CHECK >= 0"
         timestamptz created_at
     }

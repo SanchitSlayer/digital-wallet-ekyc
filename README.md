@@ -1,89 +1,230 @@
-# Digital Wallet & eKYC Prototype
+<div align="center">
 
-A proof-of-concept digital wallet with electronic identity verification (eKYC). Users register, verify their identity by uploading an ID card that is read with OCR and reviewed by an admin, and then send fake money to each other by scanning signed QR codes. Every balance change is recorded in an append-only, SHA-256 hash-chained ledger that an admin can verify.
+# Digital Wallet & eKYC
 
-All money in this project is fake. It is a learning and portfolio project, not a production payment system.
+**A full-stack digital wallet with OCR-based identity verification, atomic money transfers, a tamper-evident SHA-256 hash-chained ledger and signed QR payments.**
 
-## Features
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.152-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-27%20passing-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
-- **Accounts:** registration with name, email, phone and password (bcrypt), JWT login, `user` and `admin` roles, and a command-line script to create admins.
-- **eKYC:**
-  - JPEG/PNG upload with type and size validation.
-  - Grayscale and Otsu-threshold preprocessing, then Tesseract OCR.
-  - ID number extraction by regex and fuzzy name matching against the registered name.
-  - Admin approve or reject with a reason; resubmission only after rejection.
-- **Privacy:** ID numbers are masked to the last 4 characters in every response and log line, and ID images are stored outside any public folder under random names.
-- **Wallets:** one per user, opened when KYC is approved. Balances are integer paise. Top-up is dev-only and behind an env flag.
-- **Atomic transfers:** both wallet rows are locked with `SELECT ... FOR UPDATE` in a consistent order, and the debit, credit and ledger entries commit together or not at all. Idempotency keys prevent double payments on retry.
-- **Hash-chained ledger:** each entry stores `SHA-256(previous hash + entry data)`. A Postgres trigger blocks UPDATE and DELETE, and an admin endpoint reports "chain intact" or the first broken entry.
-- **QR payments:** the receiver generates a QR holding the wallet id, an optional amount and an expiry, signed with HMAC-SHA256. The payer scans it with the camera (or uploads an image), confirms the receiver and amount, and pays.
+[Highlights](#highlights) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Engineering decisions](#key-engineering-decisions) · [Quick start](#quick-start) · [Testing](#testing)
+
+</div>
+
+> All money in this project is fake. It is a portfolio proof of concept, not a production payment system.
+
+## Highlights
+
+- **eKYC with OCR.** Users upload an ID card. The backend preprocesses it (grayscale, upscaling, Otsu thresholding), reads it with Tesseract, extracts the ID number with a regex and fuzzy-matches the name against the registered one. An admin approves or rejects the submission.
+- **Atomic, race-free transfers.** Both wallet rows are locked with `SELECT ... FOR UPDATE` in a fixed order, so concurrent payments cannot deadlock or overdraw. In a test of 20 simultaneous payments against a balance that could cover 10, exactly 10 succeeded and the balance ended at exactly zero.
+- **Idempotent payments.** An `Idempotency-Key` header plus a unique database constraint mean a retried request never charges twice.
+- **Tamper-evident ledger.** Every balance change is chained with SHA-256 to the previous entry. A Postgres trigger blocks `UPDATE` and `DELETE`, and an admin endpoint pinpoints the first modified entry.
+- **Signed QR payments.** Payment requests are HMAC-SHA256 signed and expire. Altered or expired codes are rejected before any money moves.
+- **Privacy by default.** ID numbers are masked to the last 4 characters in every API response and log line. ID images are stored under random names outside any public folder.
+- **End-to-end type safety.** Frontend API types are generated from the backend's OpenAPI schema, so a renamed backend field fails the frontend build.
+- **27 integration tests.** They run against a real PostgreSQL test database through the real Alembic migrations.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/wallet.png" alt="Wallet dashboard with balance, dev top-up and transaction history"></td>
+    <td width="50%"><img src="docs/screenshots/admin-kyc-review.png" alt="Admin KYC review showing the ID image, masked ID number, OCR text and name match score"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Wallet</b>: balance, dev-only top-up and transaction history with counterparties</td>
+    <td align="center"><b>Admin KYC review</b>: ID image, masked ID, OCR text and name match score</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/receive-qr.png" alt="Receive page showing a signed payment QR code with amount and expiry"></td>
+    <td width="50%"><img src="docs/screenshots/pay-confirm.png" alt="Pay confirmation screen showing receiver name and amount"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Receive</b>: signed, expiring payment QR code</td>
+    <td align="center"><b>Pay</b>: scan or upload a QR, then confirm the receiver and amount</td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/ledger-verification.png" alt="Ledger verification showing chain intact, and broken at entry 5 after tampering" width="90%">
+  <br>
+  <b>Ledger verification</b>: intact chain (left), and the exact entry detected after a row was edited directly in the database (right)
+</p>
+
+## Architecture
+
+### System overview
+
+```mermaid
+flowchart LR
+    subgraph Client["Browser"]
+        UI["React + TypeScript pages"] --> APIClient["src/api/client.ts<br/>typed from OpenAPI"]
+    end
+
+    APIClient -- "JSON over HTTP<br/>Bearer JWT" --> Routers
+
+    subgraph Backend["FastAPI backend"]
+        Routers["Routers<br/>validation, auth"] --> Services["Services<br/>business rules"]
+        Services --> Repos["Repositories<br/>SQLAlchemy"]
+        Services --> OCR["Tesseract OCR<br/>+ Pillow preprocessing"]
+        Services --> Files[("uploads/<br/>random filenames")]
+        Services --> QR["qrcode PNG<br/>+ HMAC signing"]
+    end
+
+    Repos --> DB[("PostgreSQL<br/>users, kyc, wallets,<br/>transfers, ledger")]
+    Migrations["Alembic migrations<br/>+ append-only trigger"] --> DB
+```
+
+### Backend layers
+
+The backend is split into one package per domain, and every package follows the same layering:
+
+```mermaid
+flowchart TB
+    subgraph Domains["backend/app"]
+        direction LR
+        auth["auth"]
+        kyc["kyc"]
+        wallet["wallet"]
+        ledger["ledger"]
+        payments["payments"]
+    end
+
+    Router["router.py<br/>parse input, call service, return schema"] --> Service["service.py<br/>business rules, owns the transaction commit"]
+    Service --> Repository["repository.py<br/>every database query, flush only"]
+    Repository --> Models["models.py<br/>SQLAlchemy tables"]
+    Schemas["schemas.py<br/>Pydantic request and response models"] -.-> Router
+    Core["core/<br/>config, database session, bcrypt and JWT"] -.-> Service
+```
+
+| Layer | Responsibility |
+|---|---|
+| `router.py` | Thin HTTP layer: parses input, calls one service function, returns a Pydantic schema |
+| `service.py` | All business rules; decides when to commit, so one service call is one transaction |
+| `repository.py` | The only place that talks to the database; flushes, never commits |
+| `schemas.py` | Pydantic models, the single source of truth for the API contract |
+| `models.py` | SQLAlchemy table definitions |
+
+### A QR payment, end to end
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Payer
+    participant FE as React app
+    participant API as FastAPI
+    participant DB as PostgreSQL
+
+    Payer->>FE: Scan receiver's QR
+    FE->>API: POST /payments/qr/preview
+    API->>API: Verify HMAC signature and expiry
+    API-->>FE: Receiver name and amount
+    Payer->>FE: Confirm
+    FE->>API: POST /payments/qr/pay<br/>Idempotency-Key header
+    API->>DB: BEGIN
+    API->>DB: SELECT both wallets FOR UPDATE (ordered by id)
+    API->>DB: Idempotency check, balance check
+    API->>DB: INSERT transfer, debit sender, credit receiver
+    API->>DB: Append 2 hash-chained ledger entries
+    API->>DB: COMMIT (all or nothing)
+    API-->>FE: Transfer result
+```
+
+### Data model
+
+```mermaid
+erDiagram
+    users ||--o{ kyc_submissions : submits
+    users ||--o| wallets : owns
+    wallets ||--o{ transfers : "sends / receives"
+    wallets ||--o{ ledger_entries : records
+    transfers ||--o{ ledger_entries : produces
+
+    users {
+        uuid id PK
+        varchar email UK
+        varchar password_hash
+        varchar role
+    }
+    kyc_submissions {
+        uuid id PK
+        uuid user_id FK
+        varchar status
+        varchar id_number "masked in API"
+        float name_match_score
+    }
+    wallets {
+        uuid id PK
+        uuid user_id FK, UK
+        bigint balance_paise "CHECK >= 0"
+    }
+    transfers {
+        uuid id PK
+        bigint amount_paise "CHECK > 0"
+        varchar idempotency_key "unique per sender"
+    }
+    ledger_entries {
+        bigint id PK
+        bigint amount_paise
+        varchar previous_hash
+        varchar entry_hash UK
+    }
+```
+
+Full details: [docs/architecture.md](docs/architecture.md) · [docs/data-model.md](docs/data-model.md) · [docs/security-review.md](docs/security-review.md)
+
+## Key engineering decisions
+
+| Problem | Solution |
+|---|---|
+| Two payments from the same wallet at the same moment could both pass the balance check | `SELECT ... FOR UPDATE` on both wallet rows, plus `CHECK (balance_paise >= 0)` as a database backstop |
+| Two transfers locking the same wallets in opposite order would deadlock | Wallets are always locked in ascending id order |
+| A crash between the debit and the credit would lose money | Debit, credit, transfer row and ledger entries share one transaction that commits once |
+| A network retry could charge the payer twice | `Idempotency-Key` header, unique per sender, checked after the wallet lock is held |
+| Floating point cannot represent 0.10 exactly | All amounts are integer paise in `BIGINT` columns; the frontend parses rupees as text |
+| Ledger history could be edited silently | SHA-256 hash chain, verification endpoint, and a trigger that rejects `UPDATE` and `DELETE` |
+| Concurrent ledger appends could fork the chain | A transaction-scoped Postgres advisory lock serializes appends |
+| A QR code could be altered to change the amount or receiver | HMAC-SHA256 signature with a dedicated key, constant-time comparison, expiry inside the signed payload |
+| Two KYC uploads could race past the "one active submission" rule | Partial unique index on `user_id WHERE status IN ('PENDING', 'VERIFIED')` |
+| Response timing could reveal which emails are registered | Unknown emails are still checked against a placeholder bcrypt hash |
+| Frontend and backend types drift apart | TypeScript types generated from FastAPI's OpenAPI schema |
 
 ## Tech stack
 
-| Area | Technology |
+| Area | Technologies |
 |---|---|
-| Backend | Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2.0, Alembic, PyJWT, bcrypt, pytesseract, Pillow, qrcode |
-| Database | PostgreSQL 16 via Docker Compose (separate development and test databases) |
+| Backend | Python 3.11, FastAPI, Pydantic v2, SQLAlchemy 2.0, Alembic |
+| Security | bcrypt, PyJWT (HS256), HMAC-SHA256, SHA-256 hash chain |
+| OCR and imaging | Tesseract (pytesseract), Pillow, qrcode |
+| Database | PostgreSQL 16 via Docker Compose, separate development and test databases |
 | Frontend | React 19, TypeScript (strict), Vite, React Router, Tailwind CSS, html5-qrcode |
-| API types | openapi-typescript, generated from the backend's OpenAPI schema |
-| Tests | pytest and httpx against the test database, with the OCR call mocked |
+| Tooling | openapi-typescript, pytest, httpx |
 
-More detail: [docs/architecture.md](docs/architecture.md), [docs/data-model.md](docs/data-model.md), [docs/security-review.md](docs/security-review.md).
+## Quick start
 
-## Prerequisites
-
-- Docker Desktop
-- Python 3.11 or newer
-- Node.js 20 or newer
-- Tesseract OCR 5
+**Prerequisites:** Docker Desktop, Python 3.11+, Node.js 20+, and Tesseract OCR 5.
 
 | OS | Install Tesseract |
 |---|---|
 | macOS | `brew install tesseract` |
 | Ubuntu / Debian | `sudo apt install tesseract-ocr` |
-| Windows | Run the installer from https://github.com/UB-Mannheim/tesseract/wiki, then add `C:\Program Files\Tesseract-OCR` to `PATH` |
+| Windows | Run the installer from https://github.com/UB-Mannheim/tesseract/wiki and add `C:\Program Files\Tesseract-OCR` to `PATH` |
 
-Check it with `tesseract --version`.
-
-## Setup
-
-From the project root:
+**1. Configure and start the databases** (project root)
 
 ```bash
 cp .env.example .env
-```
-
-On Windows PowerShell use `Copy-Item .env.example .env`. Then generate two different secrets with `openssl rand -hex 32` and put them in `.env` as `JWT_SECRET_KEY` and `QR_SIGNING_KEY`.
-
-Start both databases:
-
-```bash
 docker compose up -d
 ```
 
-`docker compose ps` should show `db` and `db_test` as `healthy`.
+In `.env`, set `JWT_SECRET_KEY` and `QR_SIGNING_KEY` to two different values from `openssl rand -hex 32`. On Windows PowerShell use `Copy-Item .env.example .env`.
 
-## Environment variables
-
-| Variable | Purpose |
-|---|---|
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_TEST_DB` | Credentials and database names used by Docker Compose |
-| `DATABASE_URL` | SQLAlchemy URL of the development database (port 5432) |
-| `TEST_DATABASE_URL` | SQLAlchemy URL of the test database (port 5433) |
-| `JWT_SECRET_KEY` | Secret used to sign access tokens |
-| `JWT_ALGORITHM` | JWT signing algorithm (`HS256`) |
-| `JWT_EXPIRE_MINUTES` | Access token lifetime |
-| `CORS_ORIGIN` | The one browser origin allowed to call the API (the frontend URL) |
-| `UPLOAD_DIR` | Folder for ID images, relative to `backend/` |
-| `MAX_UPLOAD_BYTES` | Maximum ID image size |
-| `ENABLE_DEV_TOPUP` | `true` enables the fake-money top-up endpoint; keep `false` outside development |
-| `QR_SIGNING_KEY` | Secret used to sign QR payment requests |
-| `QR_EXPIRE_MINUTES` | How long a payment QR stays valid |
-| `VITE_API_URL` | API base URL used by the frontend |
-
-## Running the backend
-
-From `backend/`:
+**2. Run the backend** (`backend/`)
 
 ```bash
 python3 -m venv .venv
@@ -93,61 +234,134 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1` and use `python` instead of `python3`.
+On Windows activate with `.venv\Scripts\Activate.ps1`. API: http://localhost:8000 · interactive docs: http://localhost:8000/docs
 
-The API runs at http://localhost:8000, with interactive docs at http://localhost:8000/docs.
+**3. Create an admin** (`backend/`, virtual environment active)
 
-## Running the frontend
+```bash
+python -m scripts.create_admin --name "Admin User" --email admin@example.com --phone 9000000000
+```
 
-From `frontend/`:
+The password is typed twice at a hidden prompt; admins cannot sign up through the API.
+
+**4. Run the frontend** (`frontend/`)
 
 ```bash
 npm install
 npm run dev
 ```
 
-The app runs at http://localhost:5173. Other scripts:
+App: http://localhost:5173
 
-| Script | What it does |
+<details>
+<summary><b>Environment variables</b></summary>
+
+| Variable | Purpose |
 |---|---|
-| `npm run build` | Type-checks and builds the production bundle into `dist/` |
-| `npm run generate:api` | Regenerates `src/api/schema.ts` from the running backend's `/openapi.json` |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_TEST_DB` | Docker Compose database credentials and names |
+| `DATABASE_URL` | Development database (port 5432) |
+| `TEST_DATABASE_URL` | Test database (port 5433) |
+| `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES` | Access token signing and lifetime |
+| `CORS_ORIGIN` | The single browser origin allowed to call the API |
+| `UPLOAD_DIR`, `MAX_UPLOAD_BYTES` | ID image storage folder (relative to `backend/`) and size limit |
+| `ENABLE_DEV_TOPUP` | `true` enables the fake-money top-up endpoint; keep `false` outside development |
+| `QR_SIGNING_KEY`, `QR_EXPIRE_MINUTES` | QR payment request signing key and lifetime |
+| `VITE_API_URL` | API base URL used by the frontend |
 
-## Creating an admin
+</details>
 
-Admins cannot sign up through the API. From `backend/` with the virtual environment active:
+<details>
+<summary><b>Demo walkthrough</b></summary>
+
+1. Register a user whose name matches the fake ID card, for example `Jane Doe`.
+2. Upload an ID image containing lines such as `Name: JANE DOE` and `ID No: AB12345678`. The status page shows PENDING, the masked ID and the name match score.
+3. In a private window, log in as the admin, open **KYC review** and approve. This opens the user's wallet.
+4. As the user, open **Wallet** and top up some fake money.
+5. Register and verify a second user. As that user, open **Receive** and generate a QR code.
+6. As the first user, open **Pay**, scan or upload the QR, confirm and pay. Both wallets update.
+7. As the admin, open **Ledger** and click **Verify ledger** to see "Chain intact".
+
+</details>
+
+## Testing
 
 ```bash
-python -m scripts.create_admin --name "Admin User" --email admin@example.com --phone 9000000000
-```
-
-The password is typed twice at a hidden prompt.
-
-## Running the tests
-
-From `backend/` with the test database running:
-
-```bash
+cd backend
 pytest -v
 ```
 
-The suite runs the real Alembic migrations against the test database, empties every table before each test, and replaces only the Tesseract call with a fixed result. It covers:
-- registration and login;
-- expired and missing tokens;
-- KYC upload, review and resubmission rules;
-- admin-only access;
-- payments before KYC, successful payments and insufficient balance;
-- expired and tampered QR codes;
-- idempotent retries and transfer atomicity;
-- the append-only trigger, ledger verification and tamper detection.
+The suite runs the real Alembic migrations against the PostgreSQL test database, empties every table before each test, and mocks only the Tesseract call.
 
-## Demo walkthrough
+| Area | What is tested |
+|---|---|
+| Auth | Registration, duplicate email, login, wrong password, missing token, expired token |
+| KYC | Upload creates PENDING, admin approve and reject, resubmission blocked while pending and allowed after rejection |
+| Access control | A normal user is refused on every admin endpoint |
+| Payments | Blocked before KYC, successful payment with history, insufficient balance, expired QR, tampered QR, idempotent retry |
+| Atomicity | A simulated crash after the debit leaves balances and history unchanged |
+| Ledger | Chain verifies as intact, trigger rejects `UPDATE` and `DELETE`, tampering is detected at the exact entry |
 
-1. Start the databases, backend and frontend as above, and create an admin.
-2. Open http://localhost:5173 and register a user, using the name printed on the test ID card.
-3. Upload an image of a fake ID card that contains lines such as `Name: JANE DOE` and `ID No: AB12345678`. The KYC status page shows PENDING, the masked ID number and the name match score.
-4. In a private window, log in as the admin, open **KYC review**, check the image and OCR result, and approve.
-5. Back as the user, open **Wallet** and top up some fake money.
-6. Register and verify a second user the same way. As that user, open **Receive**, enter an amount and generate a QR code.
-7. As the first user, open **Pay**, scan the QR code with the camera or upload a screenshot of it, check the receiver and amount, and pay. Both wallets update and show the transaction.
-8. As the admin, open **Ledger** and click **Verify ledger** to see "Chain intact".
+The frontend production build (`npm run build`) runs a strict TypeScript check before bundling.
+
+## API overview
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| POST | `/auth/register` | Public | Create a user account |
+| POST | `/auth/login` | Public | Exchange credentials for a JWT |
+| GET | `/auth/me` | User | Current user |
+| POST | `/kyc/submissions` | User | Upload an ID image for OCR and review |
+| GET | `/kyc/submissions/me` | User | Latest KYC submission and status |
+| GET | `/wallet` | Verified user | Balance and wallet details |
+| GET | `/wallet/transactions` | Verified user | Ledger entries with counterparties |
+| POST | `/wallet/top-up` | Verified user | Add fake money (dev flag only) |
+| POST | `/payments/qr` | Verified user | Create a signed payment QR |
+| POST | `/payments/qr/preview` | Verified user | Verify a QR and show the receiver |
+| POST | `/payments/qr/pay` | Verified user | Pay a QR (requires `Idempotency-Key`) |
+| GET | `/admin/kyc/submissions` | Admin | List submissions by status |
+| GET | `/admin/kyc/submissions/{id}/image` | Admin | View an uploaded ID image |
+| POST | `/admin/kyc/submissions/{id}/approve` | Admin | Approve and open the wallet |
+| POST | `/admin/kyc/submissions/{id}/reject` | Admin | Reject with a reason |
+| GET | `/admin/ledger/verify` | Admin | Verify the ledger hash chain |
+
+## Project structure
+
+```
+digital-wallet-ekyc/
+├── backend/
+│   ├── app/
+│   │   ├── core/        config, database session, bcrypt and JWT helpers
+│   │   ├── auth/        registration, login, current-user and admin dependencies
+│   │   ├── kyc/         ID upload, OCR pipeline, admin review
+│   │   ├── wallet/      wallets, top-up, atomic transfers
+│   │   ├── ledger/      hash-chained ledger and verification
+│   │   └── payments/    signed QR payment requests
+│   ├── alembic/         migrations, including the append-only trigger
+│   ├── scripts/         create_admin.py
+│   └── tests/           pytest suite
+├── frontend/
+│   └── src/
+│       ├── api/         typed API client and generated schema.ts
+│       ├── components/  shared UI components
+│       └── features/    auth, kyc, wallet, payments, ledger pages
+├── docs/                architecture, data model, security review, screenshots
+└── docker-compose.yml   development and test PostgreSQL databases
+```
+
+## Security
+
+The full review in [docs/security-review.md](docs/security-review.md) walks through every OWASP Top 10 category, how personal data is handled, and what would change for production. In short, production would add:
+- an httpOnly cookie with CSRF protection instead of sessionStorage for the JWT;
+- encrypted document storage;
+- rate limiting;
+- orphan file cleanup;
+- HTTPS with security headers;
+- external anchoring of the ledger hash.
+
+## License
+
+Released under the [MIT License](LICENSE).
+
+## Author
+
+Built by [SanchitSlayer](https://github.com/SanchitSlayer).
