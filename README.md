@@ -61,45 +61,41 @@
 ### System overview
 
 ```mermaid
-flowchart LR
-    subgraph Client["Browser"]
-        UI["React + TypeScript pages"] --> APIClient["src/api/client.ts<br/>typed from OpenAPI"]
-    end
+flowchart TB
+    UI["React + TypeScript frontend<br/>types generated from OpenAPI"]
+    API["FastAPI routers<br/>validation, JWT auth, roles"]
+    SVC["Domain services<br/>auth, kyc, wallet, ledger, payments"]
+    REPO["Repositories<br/>SQLAlchemy 2.0"]
+    DB[("PostgreSQL<br/>append-only ledger trigger")]
+    OCR["Tesseract OCR<br/>Pillow preprocessing"]
+    FILES[("ID images<br/>random names, not public")]
+    QR["QR codes<br/>HMAC-SHA256 signed"]
 
-    APIClient -- "JSON over HTTP<br/>Bearer JWT" --> Routers
-
-    subgraph Backend["FastAPI backend"]
-        Routers["Routers<br/>validation, auth"] --> Services["Services<br/>business rules"]
-        Services --> Repos["Repositories<br/>SQLAlchemy"]
-        Services --> OCR["Tesseract OCR<br/>+ Pillow preprocessing"]
-        Services --> Files[("uploads/<br/>random filenames")]
-        Services --> QR["qrcode PNG<br/>+ HMAC signing"]
-    end
-
-    Repos --> DB[("PostgreSQL<br/>users, kyc, wallets,<br/>transfers, ledger")]
-    Migrations["Alembic migrations<br/>+ append-only trigger"] --> DB
+    UI -- "JSON + Bearer JWT" --> API
+    API --> SVC
+    SVC --> REPO
+    REPO --> DB
+    SVC --> OCR
+    SVC --> FILES
+    SVC --> QR
 ```
 
 ### Backend layers
 
-The backend is split into one package per domain, and every package follows the same layering:
+Each domain (`auth`, `kyc`, `wallet`, `ledger`, `payments`) is its own package under `backend/app/` with the same layers:
 
 ```mermaid
 flowchart TB
-    subgraph Domains["backend/app"]
-        direction LR
-        auth["auth"]
-        kyc["kyc"]
-        wallet["wallet"]
-        ledger["ledger"]
-        payments["payments"]
-    end
+    Router["router.py<br/>parse input, return schema"]
+    Service["service.py<br/>business rules, one commit per call"]
+    Repository["repository.py<br/>all database queries"]
+    DB[("PostgreSQL")]
+    Schemas["schemas.py<br/>Pydantic API contract"]
+    Core["core/<br/>config, DB session, bcrypt, JWT"]
 
-    Router["router.py<br/>parse input, call service, return schema"] --> Service["service.py<br/>business rules, owns the transaction commit"]
-    Service --> Repository["repository.py<br/>every database query, flush only"]
-    Repository --> Models["models.py<br/>SQLAlchemy tables"]
-    Schemas["schemas.py<br/>Pydantic request and response models"] -.-> Router
-    Core["core/<br/>config, database session, bcrypt and JWT"] -.-> Service
+    Router --> Service --> Repository --> DB
+    Schemas -.-> Router
+    Core -.-> Service
 ```
 
 | Layer | Responsibility |
