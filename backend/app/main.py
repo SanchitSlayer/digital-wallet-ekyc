@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.router import router as auth_router
 from app.core.config import settings
+from app.kyc.router import admin_router as kyc_admin_router
+from app.kyc.router import router as kyc_router
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
 
@@ -18,6 +20,8 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(kyc_router)
+app.include_router(kyc_admin_router)
 
 
 @app.get("/health")
