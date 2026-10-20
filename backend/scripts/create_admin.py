@@ -25,13 +25,13 @@ def main() -> None:
     try:
         request = RegisterRequest(full_name=args.name, email=args.email, phone=args.phone, password=password)
     except ValidationError as error:
-        raise SystemExit(f"Admin not created: invalid details\n{error}")
+        raise SystemExit(f"Admin not created: invalid details\n{error}") from None
 
     with SessionLocal() as db:
         try:
             user = register_user(db, request, role=UserRole.ADMIN)
         except HTTPException as error:
-            raise SystemExit(f"Admin not created: {error.detail}")
+            raise SystemExit(f"Admin not created: {error.detail}") from None
         print(f"Created admin {user.email} with id {user.id}")
 
 

@@ -26,9 +26,9 @@ def get_current_user(
     try:
         payload = decode_access_token(credentials.credentials)
     except jwt.ExpiredSignatureError:
-        raise _unauthorized("Authentication failed: token has expired, please log in again")
+        raise _unauthorized("Authentication failed: token has expired, please log in again") from None
     except jwt.InvalidTokenError:
-        raise _unauthorized("Authentication failed: token is invalid")
+        raise _unauthorized("Authentication failed: token is invalid") from None
 
     user = repository.get_user_by_id(db, uuid.UUID(payload["sub"]))
     if user is None:

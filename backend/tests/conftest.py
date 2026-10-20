@@ -31,7 +31,8 @@ FAKE_OCR_TEXT = "SAMPLE NATIONAL ID\nName: JANE DOE\nID No: AB12345678"
 
 @pytest.fixture(scope="session")
 def migrated_database() -> None:
-    # The real migrations run instead of create_all, because the ledger's append-only trigger exists only in a migration.
+    # The real migrations run instead of create_all, because the ledger's append-only trigger exists only in a
+    # migration.
     subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=BACKEND_DIR,

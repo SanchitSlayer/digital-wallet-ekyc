@@ -59,6 +59,11 @@ export function KycStatusPage() {
             <dt className="text-slate-500">Submitted</dt>
             <dd>{new Date(submission.created_at).toLocaleString()}</dd>
           </dl>
+          {submission.status === "VERIFIED" && (
+            <Link to="/wallet" className="text-indigo-600 hover:underline">
+              Open your wallet
+            </Link>
+          )}
           {submission.status === "REJECTED" && (
             <>
               <p className="rounded-md bg-red-50 p-3 text-sm text-red-800">Reason: {submission.rejection_reason}</p>

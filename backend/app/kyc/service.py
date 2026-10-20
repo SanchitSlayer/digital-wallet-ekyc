@@ -35,7 +35,7 @@ def _open_image(data: bytes) -> Image.Image:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             "Upload failed: the file could not be read as an image, it may be corrupted or not an image at all",
-        )
+        ) from None
     if image.format not in _FILE_EXTENSIONS:
         raise HTTPException(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -66,7 +66,7 @@ def submit_kyc(db: Session, user: User, data: bytes) -> KycSubmission:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "KYC check unavailable: the Tesseract OCR engine is not installed on the server",
-        )
+        ) from None
     if not result.text:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,

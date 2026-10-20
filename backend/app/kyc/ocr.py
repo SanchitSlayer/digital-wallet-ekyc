@@ -5,10 +5,13 @@ from difflib import SequenceMatcher
 import pytesseract
 from PIL import Image, ImageOps
 
-# Tesseract is most accurate when letters are roughly 20 to 30 pixels tall; small phone crops are scaled up to get there.
+# Tesseract is most accurate when letters are roughly 20 to 30 pixels tall; small phone crops are scaled up to
+# get there.
 _MIN_OCR_WIDTH = 1200
 
-_LABELLED_ID_NUMBER = re.compile(r"\bID\s*(?:NO|NUMBER|#)?\s*[.:\-]?\s*((?=[A-Z0-9]*\d)[A-Z0-9]{8,12})\b", re.IGNORECASE)
+_LABELLED_ID_NUMBER = re.compile(
+    r"\bID\s*(?:NO|NUMBER|#)?\s*[.:\-]?\s*((?=[A-Z0-9]*\d)[A-Z0-9]{8,12})\b", re.IGNORECASE
+)
 _UNLABELLED_ID_NUMBER = re.compile(r"\b((?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{8,12})\b", re.IGNORECASE)
 _NON_LETTERS = re.compile(r"[^A-Z ]+")
 

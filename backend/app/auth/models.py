@@ -21,7 +21,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     phone: Mapped[str] = mapped_column(String(16), unique=True)
     password_hash: Mapped[str] = mapped_column(String(60))
-    # Stored as text with a CHECK constraint rather than a native Postgres enum, so later phases can add roles without an ALTER TYPE.
+    # Stored as text with a CHECK constraint rather than a native Postgres enum, so later phases can add roles
+    # without an ALTER TYPE.
     role: Mapped[UserRole] = mapped_column(
         Enum(
             UserRole,
