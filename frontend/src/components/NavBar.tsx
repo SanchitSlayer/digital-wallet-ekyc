@@ -8,11 +8,16 @@ interface NavItem {
 }
 
 const USER_LINKS: NavItem[] = [
-  { to: "/kyc/status", label: "KYC status" },
-  { to: "/kyc/upload", label: "Upload ID" },
+  { to: "/wallet", label: "Wallet" },
+  { to: "/receive", label: "Receive" },
+  { to: "/pay", label: "Pay" },
+  { to: "/kyc/status", label: "KYC" },
 ];
 
-const ADMIN_LINKS: NavItem[] = [{ to: "/admin/kyc", label: "KYC review" }];
+const ADMIN_LINKS: NavItem[] = [
+  { to: "/admin/kyc", label: "KYC review" },
+  { to: "/admin/ledger", label: "Ledger" },
+];
 
 function linkClass({ isActive }: { isActive: boolean }): string {
   return isActive ? "font-semibold text-indigo-700" : "text-slate-600 hover:text-slate-900";

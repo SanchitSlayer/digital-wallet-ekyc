@@ -157,6 +157,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wallet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Wallet */
+        get: operations["my_wallet_wallet_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wallet/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Transactions */
+        get: operations["my_transactions_wallet_transactions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wallet/top-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Top Up */
+        post: operations["top_up_wallet_top_up_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/payments/qr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Payment Qr */
+        post: operations["create_payment_qr_payments_qr_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/payments/qr/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Payment */
+        post: operations["preview_payment_payments_qr_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/payments/qr/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pay With Qr */
+        post: operations["pay_with_qr_payments_qr_pay_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/ledger/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Verify Ledger */
+        get: operations["verify_ledger_admin_ledger_verify_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -216,6 +335,11 @@ export interface components {
             /** Image */
             image: string;
         };
+        /** CreatePaymentQrRequest */
+        CreatePaymentQrRequest: {
+            /** Amount Paise */
+            amount_paise?: number | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -266,6 +390,42 @@ export interface components {
             /** Email */
             email: string;
         };
+        /** LedgerEntryResponse */
+        LedgerEntryResponse: {
+            /** Id */
+            id: number;
+            entry_type: components["schemas"]["LedgerEntryType"];
+            /**
+             * Amount Paise
+             * @description Positive for money in, negative for money out
+             */
+            amount_paise: number;
+            /** Balance After Paise */
+            balance_after_paise: number;
+            /** Counterparty Name */
+            counterparty_name: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * LedgerEntryType
+         * @enum {string}
+         */
+        LedgerEntryType: "TOP_UP" | "TRANSFER_DEBIT" | "TRANSFER_CREDIT";
+        /** LedgerVerificationResponse */
+        LedgerVerificationResponse: {
+            /** Intact */
+            intact: boolean;
+            /** Entries Checked */
+            entries_checked: number;
+            /** Broken Entry Id */
+            broken_entry_id: number | null;
+            /** Reason */
+            reason: string | null;
+        };
         /** LoginRequest */
         LoginRequest: {
             /**
@@ -275,6 +435,60 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** PayWithQrRequest */
+        PayWithQrRequest: {
+            /** Qr Payload */
+            qr_payload: string;
+            /**
+             * Amount Paise
+             * @description Required only when the QR has no amount
+             */
+            amount_paise?: number | null;
+        };
+        /** PaymentPreviewResponse */
+        PaymentPreviewResponse: {
+            /**
+             * Receiver Wallet Id
+             * Format: uuid
+             */
+            receiver_wallet_id: string;
+            /** Receiver Name */
+            receiver_name: string;
+            /** Amount Paise */
+            amount_paise: number | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
+        /** PaymentQrResponse */
+        PaymentQrResponse: {
+            /**
+             * Qr Payload
+             * @description The signed text encoded in the QR image
+             */
+            qr_payload: string;
+            /** Qr Png Base64 */
+            qr_png_base64: string;
+            /**
+             * Wallet Id
+             * Format: uuid
+             */
+            wallet_id: string;
+            /** Amount Paise */
+            amount_paise: number | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
+        /** QrPayloadRequest */
+        QrPayloadRequest: {
+            /** Qr Payload */
+            qr_payload: string;
         };
         /** RegisterRequest */
         RegisterRequest: {
@@ -304,6 +518,36 @@ export interface components {
              * @default bearer
              */
             token_type: string;
+        };
+        /** TopUpRequest */
+        TopUpRequest: {
+            /**
+             * Amount Paise
+             * @description Amount in paise (100 paise = 1 rupee)
+             */
+            amount_paise: number;
+        };
+        /** TransferResponse */
+        TransferResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Receiver Wallet Id
+             * Format: uuid
+             */
+            receiver_wallet_id: string;
+            /** Receiver Name */
+            receiver_name: string;
+            /** Amount Paise */
+            amount_paise: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** UserResponse */
         UserResponse: {
@@ -342,6 +586,23 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WalletResponse */
+        WalletResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Balance Paise */
+            balance_paise: number;
+            /** Top Up Enabled */
+            top_up_enabled: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
     };
     responses: never;
@@ -613,6 +874,200 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_wallet_wallet_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletResponse"];
+                };
+            };
+        };
+    };
+    my_transactions_wallet_transactions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerEntryResponse"][];
+                };
+            };
+        };
+    };
+    top_up_wallet_top_up_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopUpRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_payment_qr_payments_qr_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentQrRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentQrResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_payment_payments_qr_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QrPayloadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pay_with_qr_payments_qr_pay_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayWithQrRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_ledger_admin_ledger_verify_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerVerificationResponse"];
                 };
             };
         };

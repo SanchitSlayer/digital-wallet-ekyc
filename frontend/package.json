@@ -10,6 +10,7 @@
     "generate:api": "openapi-typescript http://localhost:8000/openapi.json -o src/api/schema.ts"
   },
   "dependencies": {
+    "html5-qrcode": "2.3.8",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-router": "7.18.4"
