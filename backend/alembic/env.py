@@ -2,6 +2,7 @@ from logging.config import fileConfig
 
 from alembic import context
 
+import app.auth.models  # noqa: F401  Imported so the users table registers itself on Base.metadata.
 from app.core.database import Base, engine
 
 if context.config.config_file_name is not None:

@@ -1,5 +1,7 @@
 from collections.abc import Iterator
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -25,3 +27,6 @@ class Base(DeclarativeBase):
 def get_db() -> Iterator[Session]:
     with SessionLocal() as session:
         yield session
+
+
+DbSession = Annotated[Session, Depends(get_db)]
